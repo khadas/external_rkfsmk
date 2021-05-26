@@ -1110,13 +1110,18 @@ static int setup_tables(struct formatinfo *fmtinfo)
     }
 
     int file_cluste = fmtinfo->root_inode->size / fmtinfo->cluste_size;
-    fmtinfo->user_para->Mark1 = 0x5a5a5a5a;
-    fmtinfo->user_para->Mark2 = 0xa5a5a5a5;
-    fmtinfo->user_para->AlignCluste = fmtinfo->align_size / fmtinfo->cluste_size;
-    fmtinfo->user_para->EndCluste = fmtinfo->fat_entries;
-    fmtinfo->user_para->StartCluste = fmtinfo->fat_entries - (((fmtinfo->fat_entries - file_cluste) / fmtinfo->user_para->AlignCluste) - 1) * fmtinfo->user_para->AlignCluste;
+    memset(fmtinfo->user_para, 0, fmtinfo->cluste_size);
+    if (fmtinfo->align_size > 0) {
+        fmtinfo->user_para->Mark1 = 0x5a5a5a5a;
+        fmtinfo->user_para->Mark2 = 0xa5a5a5a5;
+        fmtinfo->user_para->AlignCluste = fmtinfo->align_size / fmtinfo->cluste_size;
+        fmtinfo->user_para->EndCluste = fmtinfo->fat_entries;
+        fmtinfo->user_para->StartCluste = fmtinfo->fat_entries - (((fmtinfo->fat_entries - file_cluste) / fmtinfo->user_para->AlignCluste) - 1) * fmtinfo->user_para->AlignCluste;
+        fmtinfo->file_cluste = fmtinfo->user_para->StartCluste - file_cluste;
+    } else {
+        fmtinfo->file_cluste = fmtinfo->fat_entries - file_cluste;
+    }
     fmtinfo->dir_cluste = 4;
-    fmtinfo->file_cluste = fmtinfo->user_para->StartCluste - file_cluste;
     if (creat_root_cluste(fmtinfo) != 0) {
         ret = -1;
         goto out;
@@ -1227,33 +1232,6 @@ static int write_tables(struct formatinfo *fmtinfo)
     }
 
     return 0;
-}
-
-
-/* The "main" entry point into the utility - we pick up the options and attempt to process them in some sort of sensible
-   way.  In the event that some/all of the options are invalid we need to tell the user so that something can be done! */
-
-int rkfsmk_start(void *handle)
-{
-    int ret = 0;
-    struct formatinfo *fmtinfo = (struct formatinfo*)handle;
-
-    if (!fmtinfo)
-        return -1;
-
-    ret = setup_tables(fmtinfo);     /* Establish the filesystem tables */
-    if (ret)
-        goto out;
-
-    if (fmtinfo->check)          /* Determine any bad block locations and mark them */
-        check_blocks(fmtinfo);
-
-    ret = write_tables(fmtinfo);     /* Write the filesystem tables away! */
-out:
-    if (fmtinfo->dev)
-        close(fmtinfo->dev);
-
-    return ret;
 }
 
 static inline uint32_t raid6_jiffies(void)
@@ -2046,12 +2024,13 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
 {
     int ret = 0;
     int dev = -1;
-    struct formatinfo *fmtinfo;
+    struct formatinfo *fmtinfo = NULL;
     uint64_t cblocks = 0;
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20210430\n");
+    printf("rkfsmk 20210526\n");
+    *info = (void *)fmtinfo;
 
     if (check_mount(device_name) == -1) {
         ret = -1;
@@ -2184,9 +2163,43 @@ void rkfsmk_destroy(void *handle)
     }
 }
 
+/* The "main" entry point into the utility - we pick up the options and attempt to process them in some sort of sensible
+   way.  In the event that some/all of the options are invalid we need to tell the user so that something can be done! */
+
+int rkfsmk_start(void *handle)
+{
+    int ret = 0;
+    struct formatinfo *fmtinfo = (struct formatinfo*)handle;
+
+    if (!fmtinfo)
+        return -1;
+
+    ret = setup_tables(fmtinfo);     /* Establish the filesystem tables */
+    if (ret)
+        goto out;
+
+    if (fmtinfo->check)          /* Determine any bad block locations and mark them */
+        check_blocks(fmtinfo);
+
+    ret = write_tables(fmtinfo);     /* Write the filesystem tables away! */
+out:
+    if (fmtinfo->dev)
+        close(fmtinfo->dev);
+
+    return ret;
+}
+
 unsigned long long rkfsmk_disk_size_get(void *handle)
 {
     struct formatinfo *fmtinfo = (struct formatinfo *)handle;
 
     return fmtinfo->devinfo.size;
+}
+
+int rkfsmk_format(char *device_name, char *volume_name)
+{
+    struct formatinfo *fmtinfo = NULL;
+    rkfsmk_create((void **)&fmtinfo, device_name, volume_name, 0);
+    rkfsmk_start(fmtinfo);
+    rkfsmk_destroy(fmtinfo);
 }

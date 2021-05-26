@@ -125,10 +125,17 @@ void createfile_test(char *device_name)
     printf("format and create file num = %d time_cons = %fms\n", num, time_cons);
 }
 
+void only_format(char *device_name, char *volume_name)
+{
+    rkfsmk_format(device_name, volume_name);
+}
+
 int main(int argc , char **argv)
 {
-    if (argc >= 2) {
+    if (argc == 2) {
         createfile_test(argv[1]);
+    } else if (argc == 3) {
+        only_format(argv[1], argv[2]);
     }
 
     return 0;
