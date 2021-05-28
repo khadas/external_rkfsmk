@@ -2029,11 +2029,12 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20210526\n");
+    printf("rkfsmk 20210526-2\n");
+    printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
     if (check_mount(device_name) == -1) {
-        ret = -1;
+        ret = -4;
         goto err;
     }
 
@@ -2131,9 +2132,11 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
         memcpy(fmtinfo->volume_name, NO_NAME, MSDOS_NAME);
 
     *info = (void *)fmtinfo;
+    printf("disk format sus\n");
 
     return 0;
 err:
+    printf("disk format err %d\n", ret);
     if (dev > 0)
         close(dev);
     if (fmtinfo) {
@@ -2141,7 +2144,9 @@ err:
             free(fmtinfo->root_inode);
         }
         free(fmtinfo);
+        *info = NULL;
     }
+
     return ret;
 }
 
@@ -2198,8 +2203,13 @@ unsigned long long rkfsmk_disk_size_get(void *handle)
 
 int rkfsmk_format(char *device_name, char *volume_name)
 {
+    int ret = 0;
     struct formatinfo *fmtinfo = NULL;
-    rkfsmk_create((void **)&fmtinfo, device_name, volume_name, 0);
-    rkfsmk_start(fmtinfo);
-    rkfsmk_destroy(fmtinfo);
+    ret = rkfsmk_create((void **)&fmtinfo, device_name, volume_name, 0);
+    if (ret == 0) {
+        ret = rkfsmk_start(fmtinfo);
+        rkfsmk_destroy(fmtinfo);
+    }
+
+    return ret;
 }

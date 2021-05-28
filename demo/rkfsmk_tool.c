@@ -127,13 +127,17 @@ void createfile_test(char *device_name)
 
 void only_format(char *device_name, char *volume_name)
 {
-    rkfsmk_format(device_name, volume_name);
+    int i = 0;
+    for (i = 0; i < 2; i++) {
+        int ret = rkfsmk_format(device_name, volume_name);
+        printf("%s ret = %d\n", __func__, ret);
+    }
 }
 
 int main(int argc , char **argv)
 {
     if (argc == 2) {
-        createfile_test(argv[1]);
+        only_format(argv[1], NULL);
     } else if (argc == 3) {
         only_format(argv[1], argv[2]);
     }
