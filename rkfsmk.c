@@ -2029,7 +2029,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20210526-2\n");
+    printf("rkfsmk 20210707\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
@@ -2066,7 +2066,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     fmtinfo->malloc_entire_fat = TRUE;
     fmtinfo->align_structures = TRUE;
     fmtinfo->check = FALSE;
-    fmtinfo->nr_fats = 2;
+    fmtinfo->nr_fats = 1;
     fmtinfo->dev = dev;
     fmtinfo->cluster_count = 2;
 

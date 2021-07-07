@@ -128,7 +128,7 @@ void createfile_test(char *device_name)
 void only_format(char *device_name, char *volume_name)
 {
     int i = 0;
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 1; i++) {
         int ret = rkfsmk_format(device_name, volume_name);
         printf("%s ret = %d\n", __func__, ret);
     }
