@@ -45,6 +45,7 @@
 
 /* Include the header files */
 
+#define _GNU_SOURCE
 #include <fcntl.h>
 #include <signal.h>
 #include <string.h>
@@ -59,11 +60,16 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <getopt.h>
+#include <sys/ioctl.h> 
+#include <linux/types.h>
 
 #include "msdos_fs.h"
 #include "device_info.h"
 #include "rkfsmk.h"
 #include "uni_chr.h"
+
+#define FAT_IOCTL_SET_ALIGNSIZE		_IOR('r', 0x14, __u32)
+#define FAT_IOCTL_GET_ALIGNSIZE		_IOR('r', 0x15, __u32)
 
 #define SIZE_1MB    (1024 * 1024)
 
@@ -2029,7 +2035,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20210707\n");
+    printf("rkfsmk 20210712\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
@@ -2212,4 +2218,36 @@ int rkfsmk_format(char *device_name, char *volume_name)
     }
 
     return ret;
+}
+
+int kernel_get_file_size(char *filename, off_t *size, off_t *space)
+{
+    int ret;
+    struct stat statbuf;
+
+    ret = lstat(filename, &statbuf);
+
+    if (ret == 0) {
+        *size = statbuf.st_size;
+        *space = statbuf.st_blocks * 512;
+    }
+
+    return ret;
+}
+
+int kernel_pre_created_file(char *filename, off_t size)
+{
+    int fd = open(filename, O_CREAT | O_RDWR | O_DIRECT);
+    if (fd) {
+        write(fd, NULL, size);
+        fsync(fd);
+        close(fd);
+        return 0;
+    }
+    return -1;
+}
+
+int kernel_set_alignsize(int file_fd, unsigned int alignsize)
+{
+    return ioctl(file_fd, FAT_IOCTL_SET_ALIGNSIZE, &alignsize);
 }

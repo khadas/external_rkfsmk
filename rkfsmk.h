@@ -14,4 +14,8 @@ int rkfsmk_add_file(void *handle, char *path, char *filename, int hidden, int si
 void rkfsmk_destroy(void *handle);
 unsigned long long rkfsmk_disk_size_get(void *handle);
 
+int kernel_get_file_size(char *filename, off_t *size, off_t *space);
+int kernel_pre_created_file(char *filename, off_t size);
+int kernel_set_alignsize(int file_fd, unsigned int alignsize);
+
 #endif
