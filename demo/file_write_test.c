@@ -66,9 +66,20 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 
-void createfile_test(char *device_name, char *volume_name)
+#define MAX_CH     8
+#define MAX_FILE   20
+#define FILE_SIZE  (64 * SIZE_1MB)
+
+static int quit = 0;
+static void sigterm_handler(int sig) {
+  fprintf(stderr, "signal %d\n", sig);
+  quit = 1;
+}
+
+void createfile_test(char *device_name)
 {
     int i;
+    int j;
     int ret;
     char name[128];
     struct timeval tvAllBegin;
@@ -78,7 +89,7 @@ void createfile_test(char *device_name, char *volume_name)
     int num = 0;
     long long disk_size;
     gettimeofday(&tvAllBegin, NULL);
-    ret = rkfsmk_create(&fmtinfo, device_name, volume_name, 0);
+    ret = rkfsmk_create(&fmtinfo, device_name, NULL, 0);
     if (ret < 0) {
         if (ret == -1)
             printf("%s is not unmounted\n", device_name);
@@ -92,28 +103,15 @@ void createfile_test(char *device_name, char *volume_name)
     //rkfsmk_add_dir(fmtinfo, "/.hidden/", 1);
     //rkfsmk_add_dir(fmtinfo, "/video0/", 0);
     //rkfsmk_add_dir(fmtinfo, "/video1/", 0);
-#if 1
-    for (i = 0; i < 500; i++) {
-        sprintf(name, "fileadbcederf%d.mp4", i);
-        rkfsmk_add_file(fmtinfo, "/pic0/", name, 0, 3 * SIZE_1MB);
-        num++;
+
+    for (j = 0; j < MAX_CH; j++) {
+        for (i = 0; i < MAX_FILE; i++) {
+            sprintf(name, "file_ch%02d_%02d.mp4", j, i);
+            rkfsmk_add_file(fmtinfo, "/video/", name, 0, FILE_SIZE);
+            num++;
+        }
     }
-    for (i = 0; i < 500; i++) {
-        sprintf(name, "fileadbcederf%d.mp4", i);
-        rkfsmk_add_file(fmtinfo, "/pic1/", name, 0, 3 * SIZE_1MB);
-        num++;
-    }
-    for (i = 0; i < 500; i++) {
-        sprintf(name, "fileadbcederf%d.mp4", i);
-        rkfsmk_add_file(fmtinfo, "/pic2/", name, 0, 3 * SIZE_1MB);
-        num++;
-    }
-    for (i = 0; i < 500; i++) {
-        sprintf(name, "fileadbcederf%d.mp4", i);
-        rkfsmk_add_file(fmtinfo, "/pic3/", name, 0, 3 * SIZE_1MB);
-        num++;
-    }
-#endif
+
     ret = rkfsmk_start(fmtinfo);
     if (ret == 0)
         printf("format %s success\n", device_name);
@@ -125,22 +123,79 @@ void createfile_test(char *device_name, char *volume_name)
     printf("format and create file num = %d time_cons = %fms\n", num, time_cons);
 }
 
-void only_format(char *device_name, char *volume_name)
+void creatfile(char *name, long size)
+{
+    int fd;
+    int buflen = 4 * 1024;
+    long size_bk = size;
+    unsigned char *buf = (unsigned char *)malloc(buflen);
+    printf("%s %s 1 size = %ld\n", __func__, name, size);
+    fd = open(name, O_RDWR);
+    if (fd) {
+        while (size > 0 && !quit) {
+            if (size > buflen) {
+                write(fd, buf, buflen);
+                size -= buflen;
+            } else {
+                write(fd, buf, size);
+                break;
+            }
+            usleep(1000);
+        }
+        close(fd);
+    }
+
+    //printf("%s %s 2 size = %ld\n", __func__, name, size_bk - size);
+    free(buf);
+}
+
+static void *creat_file_thread(void *arg)
+{
+    int ch = (int)arg;
+    char name[128];
+    int i;
+    while (!quit) {
+        for (i = 0; i < MAX_FILE && !quit; i++) {
+            sprintf(name, "/mnt/sdcard/video/file_ch%02d_%02d.mp4", ch, i);
+            creatfile(name, FILE_SIZE);
+        }
+    }
+    //printf("%s ch = %d out\n", __func__, ch);
+
+    //pthread_detach(pthread_self());
+    //pthread_exit(NULL);
+}
+
+void creat_file_test()
 {
     int i = 0;
-    for (i = 0; i < 1; i++) {
-        int ret = rkfsmk_format(device_name, volume_name);
-        printf("%s ret = %d\n", __func__, ret);
+    pthread_t tid[MAX_CH];
+    for (i = 0; i < MAX_CH; i++) {
+        pthread_create(&tid[i], NULL, creat_file_thread, i);
     }
+    while (!quit) {
+        sleep(1);
+        printf("sync start\n");
+        sync();
+        printf("sync end\n");
+    }
+    for (i = 0; i < MAX_CH; i++) {
+        pthread_join(tid[i], NULL);
+    }
+    sync();
 }
 
 int main(int argc , char **argv)
 {
+    printf("file_write_test in\n");
+    signal(SIGINT, sigterm_handler);
     if (argc == 2) {
-        only_format(argv[1], NULL);
-    } else if (argc == 3) {
-        only_format(argv[1], argv[2]);
+        createfile_test(argv[1]);
     }
+    if (argc == 1) {
+        creat_file_test();
+    }
+    printf("file_write_test out\n");
 
     return 0;
 }
