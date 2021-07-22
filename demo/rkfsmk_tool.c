@@ -134,12 +134,20 @@ void only_format(char *device_name, char *volume_name)
     }
 }
 
+void check_format(char *path)
+{
+    int ret = kernel_chk_format(path);
+    printf("%s %d\n", __func__, ret);
+}
+
 int main(int argc , char **argv)
 {
     if (argc == 2) {
-        only_format(argv[1], NULL);
+        check_format(argv[1]);
     } else if (argc == 3) {
         only_format(argv[1], argv[2]);
+    } else {
+    	
     }
 
     return 0;

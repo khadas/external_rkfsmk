@@ -17,5 +17,6 @@ unsigned long long rkfsmk_disk_size_get(void *handle);
 int kernel_get_file_size(char *filename, off_t *size, off_t *space);
 int kernel_pre_created_file(char *filename, off_t size);
 int kernel_set_alignsize(int file_fd, unsigned int alignsize);
+int kernel_chk_format(char *path);
 
 #endif

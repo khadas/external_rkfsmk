@@ -70,6 +70,7 @@
 
 #define FAT_IOCTL_SET_ALIGNSIZE		_IOR('r', 0x14, __u32)
 #define FAT_IOCTL_GET_ALIGNSIZE		_IOR('r', 0x15, __u32)
+#define FAT_IOCTL_CHK_FORMAT  		_IOR('r', 0x16, __u32)
 
 #define SIZE_1MB    (1024 * 1024)
 
@@ -2035,7 +2036,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20210721\n");
+    printf("rkfsmk 20210722\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
@@ -2251,4 +2252,22 @@ int kernel_pre_created_file(char *filename, off_t size)
 int kernel_set_alignsize(int file_fd, unsigned int alignsize)
 {
     return ioctl(file_fd, FAT_IOCTL_SET_ALIGNSIZE, &alignsize);
+}
+
+int kernel_chk_format(char *path)
+{
+	  char *filename;
+	  int flag = -1;
+	  int fd;
+	  int len = strlen(path) + 16;
+	  filename = malloc(len);
+	  sprintf(filename, "%s/chkfmt", path);
+    fd = open(filename, O_CREAT | O_RDWR);
+    if (fd) {
+        ioctl(fd, FAT_IOCTL_CHK_FORMAT, &flag);
+        close(fd);
+        remove(filename);
+    }
+    free(filename);
+    return flag;
 }
