@@ -74,6 +74,7 @@
 
 #define SIZE_1MB    (1024 * 1024)
 
+#define DIR_SIZE    SIZE_1MB
 /* Constant definitions */
 
 #define TRUE 1          /* Boolean constants */
@@ -265,6 +266,7 @@ struct formatinfo {
     int invariant;                  /* Whether to set normally randomized or current time based values to constants */
     unsigned char *info_sector;     /* FAT32 info sector */
     struct inode *root_inode;
+    char format_id[8];
     struct user_para_info *user_para;
 };
 
@@ -602,9 +604,9 @@ static int setup_tables(struct formatinfo *fmtinfo)
          * differently: The jump code is only 2 bytes (and m68k machine code
          * :-), then 6 bytes filler (ignored), then 3 byte serial number. */
         fmtinfo->bs.boot_jump[2] = 'm';
-        memcpy((char *)fmtinfo->bs.system_id, "rkfsmk", strlen("rkfsmk"));
+        memcpy((char *)fmtinfo->bs.system_id, fmtinfo->format_id, 8);
     } else
-        memcpy((char *)fmtinfo->bs.system_id, "rkfsmk", strlen("rkfsmk"));
+        memcpy((char *)fmtinfo->bs.system_id, fmtinfo->format_id, 8);
     if (fmtinfo->sectors_per_cluster)
         fmtinfo->bs.cluster_size = (char)fmtinfo->sectors_per_cluster;
 
@@ -1839,8 +1841,15 @@ static int creat_tree_clustes(struct formatinfo *fmtinfo, struct inode *inode)
     if (child) {
         //printf("child->name %s\n", child->name);
         if (child->isdir) {
-            fmtinfo->cluster_count++;
-            add_cluste(child, child->isdir, fmtinfo->cluste_size, fmtinfo->dir_cluste++);
+            int i;
+            int num = (child->size + fmtinfo->cluste_size - 1) / fmtinfo->cluste_size;
+            if (num < 0)
+                num = 1;
+            //printf("%s size = %lld, num = %d\n", child->name, child->size, num);
+            for (i = 0; i < num; i++) {
+                fmtinfo->cluster_count++;
+                add_cluste(child, child->isdir, fmtinfo->cluste_size, fmtinfo->dir_cluste++);
+            }
             build_dot_slots(fmtinfo, child);
         } else {
             int i;
@@ -1856,12 +1865,19 @@ static int creat_tree_clustes(struct formatinfo *fmtinfo, struct inode *inode)
     if (next) {
         //printf("next->name %s\n", next->name);
         if (next->isdir) {
-            fmtinfo->cluster_count++;
-            add_cluste(next, next->isdir, fmtinfo->cluste_size, fmtinfo->dir_cluste++);
+            int i;
+            int num = (next->size + fmtinfo->cluste_size - 1) / fmtinfo->cluste_size;
+            //printf("%s size = %lld, num = %d\n", next->name, next->size, num);
+            for (i = 0; i < num; i++) {
+                fmtinfo->cluster_count++;
+                add_cluste(next, next->isdir, fmtinfo->cluste_size, fmtinfo->dir_cluste++);
+            }
             build_dot_slots(fmtinfo, next);
         } else {
             int i;
             int num = (next->size + fmtinfo->cluste_size - 1) / fmtinfo->cluste_size;
+            if (num < 0)
+                num = 1;
             //printf("%s size = %lld, num = %d\n", next->name, next->size, num);
             for (i = 0; i < num; i++) {
                 fmtinfo->cluster_count++;
@@ -1949,18 +1965,20 @@ static struct inode *new_inode(void *handle, struct inode *father_inode, char *n
     return inode;
 }
 
-static struct inode *add_dir(void *handle, char *path, int hidden)
+static struct inode *add_dir(void *handle, char *path, int hidden, int size)
 {
     struct formatinfo *fmtinfo = (struct formatinfo*)handle;
     struct inode *inode = fmtinfo->root_inode;
     int depth = 1;
     char dir[128];
     memset(dir, 0, 128);
+
     //printf("%s path = %s\n", __func__, path);
     while (get_dir_depth(path, depth, dir) == 0) {
         struct inode *father_inode = inode;
         if (inode->child == NULL) {
             inode->child = new_inode(fmtinfo, father_inode, dir, 1, hidden);
+            inode->child->size = size;
             inode = inode->child;
         } else {
             inode = inode->child;
@@ -1976,6 +1994,7 @@ static struct inode *add_dir(void *handle, char *path, int hidden)
             }
             if (inode->next == NULL) {
                 inode->next = new_inode(fmtinfo, father_inode, dir, 1, hidden);
+                inode->next->size = size;
                 inode = inode->next;
                 goto cont;
             }
@@ -1988,15 +2007,15 @@ static struct inode *add_dir(void *handle, char *path, int hidden)
     return inode;
 }
 
-void rkfsmk_add_dir(void *handle, char *path, int hidden)
+void rkfsmk_add_dir(void *handle, char *path, int hidden, int size)
 {
-    add_dir(handle, path, hidden);
+    add_dir(handle, path, hidden, size);
 }
 
 int rkfsmk_add_file(void *handle, char *path, char *filename, int hidden, int size)
 {
     struct formatinfo *fmtinfo = (struct formatinfo*)handle;
-    struct inode *inode = add_dir(fmtinfo, path, hidden);
+    struct inode *inode = add_dir(fmtinfo, path, hidden, 0);
     struct inode *father_inode = inode;
 
     fmtinfo->root_inode->size += size;
@@ -2036,7 +2055,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20210722\n");
+    printf("rkfsmk 20211128\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
@@ -2202,6 +2221,20 @@ out:
     return ret;
 }
 
+int rkfsmk_set_format_id(void *handle, char format_id[8])
+{
+    int ret = 0;
+    struct formatinfo *fmtinfo = (struct formatinfo*)handle;
+
+    if (!fmtinfo)
+        return -1;
+
+    memcpy(fmtinfo->format_id, format_id, 8);
+
+    return ret;
+}
+
+
 unsigned long long rkfsmk_disk_size_get(void *handle)
 {
     struct formatinfo *fmtinfo = (struct formatinfo *)handle;
@@ -2215,6 +2248,22 @@ int rkfsmk_format(char *device_name, char *volume_name)
     struct formatinfo *fmtinfo = NULL;
     ret = rkfsmk_create((void **)&fmtinfo, device_name, volume_name, 0);
     if (ret == 0) {
+        char format_id[8] = {'R', 'K', 'F', 'S', 'M', 'K', '0', '1'};
+        rkfsmk_set_format_id(fmtinfo, format_id);
+        ret = rkfsmk_start(fmtinfo);
+        rkfsmk_destroy(fmtinfo);
+    }
+
+    return ret;
+}
+
+int rkfsmk_format_ex(char *device_name, char *volume_name, char format_id[8])
+{
+    int ret = 0;
+    struct formatinfo *fmtinfo = NULL;
+    ret = rkfsmk_create((void **)&fmtinfo, device_name, volume_name, 0);
+    if (ret == 0) {
+        rkfsmk_set_format_id(fmtinfo, format_id);
         ret = rkfsmk_start(fmtinfo);
         rkfsmk_destroy(fmtinfo);
     }

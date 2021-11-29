@@ -3,13 +3,16 @@
 
 /* ret: 0 success,-1 no devvice, -4 devvice no umount*/
 int rkfsmk_format(char *device_name, char *volume_name);
+int rkfsmk_format_ex(char *device_name, char *volume_name, char format_id[8]);
 
 int rkfsmk_start(void *handle);
 
 /* ret: 0 success,-1 no devvice, -4 devvice no umount*/
 int rkfsmk_create(void **handle, char *device_name, char *volume_name, unsigned int align_size);
 
-void rkfsmk_add_dir(void *handle, char *path, int hidden);
+int rkfsmk_set_format_id(void *handle, char format_id[8]);
+
+void rkfsmk_add_dir(void *handle, char *path, int hidden, int size);
 int rkfsmk_add_file(void *handle, char *path, char *filename, int hidden, int size);
 void rkfsmk_destroy(void *handle);
 unsigned long long rkfsmk_disk_size_get(void *handle);
