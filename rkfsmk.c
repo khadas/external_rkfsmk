@@ -2055,7 +2055,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20211128\n");
+    printf("rkfsmk 20211129\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
@@ -2153,10 +2153,17 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     establish_params(fmtinfo, &fmtinfo->devinfo);
     /* Establish the media parameters */
 
-    if (volume_name)
-        memcpy(fmtinfo->volume_name, volume_name, MSDOS_NAME);
-    else
+    memset(fmtinfo->volume_name, 0, MSDOS_NAME);
+    if (volume_name) {
+        int volume_len = strlen(volume_name);
+        volume_len = (volume_len > MSDOS_NAME) ? MSDOS_NAME : volume_len;
+        if (volume_len)
+            memcpy(fmtinfo->volume_name, volume_name, volume_len);
+        else 
+            memcpy(fmtinfo->volume_name, NO_NAME, MSDOS_NAME);
+    } else {
         memcpy(fmtinfo->volume_name, NO_NAME, MSDOS_NAME);
+    }
 
     *info = (void *)fmtinfo;
     printf("disk format sus\n");
