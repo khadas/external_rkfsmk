@@ -135,6 +135,23 @@ static int mp4_set_end(int fd, off_t offset)
     return -1;
 }
 
+static int mp4_moov_check(int fd, off_t offset)
+{
+    char buff[8];
+    int moov_len;
+
+    memset(buff, 0, 8);
+    lseek(fd, offset, SEEK_SET);
+    read(fd, buff, 8);
+    moov_len = buff[0] << 24 | buff[1] << 16 | buff[2] << 8 | buff[3];
+
+    if (moov_len && (buff[4] == 'm') && (buff[5] == 'o') && (buff[6] == 'o') && (buff[7] == 'v'))
+        return 0;
+
+    printf("%s mdat len err\n", __func__);
+    return -1;
+}
+
 int repair_mp4(char *file)
 {
     int ret = REPA_FAIL;
@@ -143,7 +160,7 @@ int repair_mp4(char *file)
     char *buff = NULL;
     int need_remove = 0;
     //printf("%s file = %s\n", __func__, file);
-    printf("%s 20211202\n", __func__);
+    printf("%s 20211203\n", __func__);
     if (file) {
         fd = open(file, O_RDWR);
         if (fd) {
@@ -179,6 +196,11 @@ int repair_mp4(char *file)
                 printf("no mdat info\n");
             else
                 mdat_len = mp4_get_mdat_len(&buff[mdat_offset]);
+
+            if (mdat_len) {
+                if (mp4_moov_check(fd, mdat_offset + mdat_len) == -1)
+                    mdat_len = 0;
+            }
 
             if (mdat_len == 0) {
                 int again = 0;
