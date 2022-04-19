@@ -2055,7 +2055,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20211129\n");
+    printf("rkfsmk 20211231\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
@@ -2096,6 +2096,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     fmtinfo->dev = dev;
     fmtinfo->cluster_count = 2;
     fmtinfo->size_fat_by_user = 1;
+    fmtinfo->ignore_full_disk = 1;
 
     gettimeofday(&create_timeval, NULL);
     fmtinfo->create_time = create_timeval.tv_sec;

@@ -651,6 +651,7 @@ static int check_file(DOS_FS * fs, DOS_FILE * file, struct folder_para *folder)
                 MODIFY_START(file, 0, fs);
             break;
         }
+#if 0
         if (fs->userpara && FSTART(file, fs) >= fs->userpara->StartCluste) {
 
         } else {
@@ -666,6 +667,7 @@ static int check_file(DOS_FS * fs, DOS_FILE * file, struct folder_para *folder)
                 break;
             }
         }
+#endif
         if ((owner = GetOwner(fs, curr))) {
             int do_trunc = 0;
             printf("%s  and\n", path_name(owner));
@@ -771,6 +773,7 @@ static int check_file(DOS_FS * fs, DOS_FILE * file, struct folder_para *folder)
     //if (fs->userpara && FSTART(file, fs) >= fs->userpara->StartCluste) {
     //    printf("    %d, %d, %d, %d\n", FSTART(file, fs), le32toh(file->dir_ent.size), clusters, clusters % fs->userpara->AlignCluste);
     //}
+#if 0
     if (!(file->dir_ent.attr & ATTR_DIR) && le32toh(file->dir_ent.size) >
         (uint64_t)clusters * fs->cluster_size) {
         printf
@@ -782,7 +785,7 @@ static int check_file(DOS_FS * fs, DOS_FILE * file, struct folder_para *folder)
         MODIFY(file, size,
                htole32((uint64_t)clusters * fs->cluster_size), fs);
     }
-
+#endif
     if (folder) {
         struct stat st;
         unsigned long long blocks;

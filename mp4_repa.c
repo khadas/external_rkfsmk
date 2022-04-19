@@ -126,9 +126,7 @@ static int mp4_set_end(int fd, off_t offset)
     end_offset = offset + moov_len;
     memset(buff, 0, 8);
     seek_offset = lseek(fd, end_offset, SEEK_SET);
-    if (seek_offset == -1)
-        seek_offset = lseek(fd, 0, SEEK_END);
-    if (write(fd, buff, 8) == 8) {
+    if ((seek_offset == end_offset) && (write(fd, buff, 8) == 8)) {
         return 0;
     }
 
@@ -145,8 +143,11 @@ static int mp4_moov_check(int fd, off_t offset)
     read(fd, buff, 8);
     moov_len = buff[0] << 24 | buff[1] << 16 | buff[2] << 8 | buff[3];
 
-    if (moov_len && (buff[4] == 'm') && (buff[5] == 'o') && (buff[6] == 'o') && (buff[7] == 'v'))
-        return 0;
+    if (moov_len && (buff[4] == 'm') && (buff[5] == 'o') && (buff[6] == 'o') && (buff[7] == 'v')) {
+        unsigned long file_size = lseek(fd, 0, SEEK_END);
+        if ((offset + moov_len) <= file_size)
+            return 0;
+    }
 
     printf("%s mdat len err\n", __func__);
     return -1;
@@ -160,7 +161,7 @@ int repair_mp4(char *file)
     char *buff = NULL;
     int need_remove = 0;
     //printf("%s file = %s\n", __func__, file);
-    printf("%s 20211203\n", __func__);
+    printf("%s 20211206 %s\n", __func__, file);
     if (file) {
         fd = open(file, O_RDWR);
         if (fd) {
@@ -239,12 +240,34 @@ int repair_mp4(char *file)
                         mdat_len = file_offset + moov_offset - mdat_offset;
                         //printf("file_offset = 0x%llx, moov_offset = 0x%llx, mdat_offset = 0x%llx, mdat_len= 0x%x\n", file_offset, moov_offset, mdat_offset, mdat_len);
                         //printf("0x%llx\n", file_offset + moov_offset);
-                        if (mp4_set_mdat_len(fd, mdat_offset, mdat_len) == 0) {
-                            mp4_set_end(fd, file_offset + moov_offset);
-                            printf("Repaired successfully\n");
-                            ret = REPA_SUCC;
+                        if (mp4_moov_check(fd, mdat_offset + mdat_len) == 0) {
+                            if (mp4_set_mdat_len(fd, mdat_offset, mdat_len) == 0) {
+                                mp4_set_end(fd, file_offset + moov_offset);
+                                printf("Repaired successfully\n");
+                                ret = REPA_SUCC;
+                            }
+                            break;
+                        } else {
+                            if (file_offset == 0) {
+                                printf("Repaired fail\n");
+                                ret = REPA_FAIL;
+                                break;
+                            } else {
+                                if (moov_offset == -5) {
+                                    file_offset = file_offset - buff_size + 64;
+                                } else if (moov_offset < 0) {
+                                    file_offset = file_offset - 4;
+                                } else {
+                                    if (again) {
+                                       again = 0;
+                                       file_offset = file_offset - buff_size + moov_offset;
+                                    } else {
+                                       again = 1;
+                                       file_offset = file_offset + moov_offset;
+                                    }
+                                }
+                            }
                         }
-                        break;
                     }
                 }
             } else {
