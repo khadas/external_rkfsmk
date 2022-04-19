@@ -27,7 +27,23 @@ seekstr(const char *str, int slen,const char *token)
     return NULL;
 }
 
-static int mp4_get_moov_offset(char *buff, int buff_len, __u64 repa_id, int *find)
+static int mp4_get_moov_offset(char *buff, int buff_len, int *find)
+{
+    char *moov = seekstr(buff, buff_len, "moov");
+    int ret = -5;
+    *find = 0;
+
+    if (moov) {
+        int offset = moov - buff;
+        int len = buff_len - offset;
+        ret = offset - 4;
+        *find = 1;
+    }
+
+    return ret;
+}
+
+static int mp4_get_moov_offset_repa(char *buff, int buff_len, __u64 repa_id, int *find)
 {
     char *moov = seekstr(buff, buff_len, "moov");
     int ret = -5;
@@ -38,7 +54,6 @@ static int mp4_get_moov_offset(char *buff, int buff_len, __u64 repa_id, int *fin
         int len = buff_len - offset;
         char *repa = seekstr(moov, len, "repa");
         ret = offset - 4;
-        //printf("%s, offset = 0x%x, %d, %d\n", __func__, offset, repa - moov, len);
         if (len >= 20 && repa) {
             int i;
             __u64 tmp_id = 0;
@@ -49,6 +64,8 @@ static int mp4_get_moov_offset(char *buff, int buff_len, __u64 repa_id, int *fin
             //printf("%s %016llx, %016llx\n", __func__, tmp_id, repa_id);
             if (tmp_id == repa_id)
                 *find = 1;
+            else 
+                *find = -1;
         }
     }
 
@@ -68,7 +85,7 @@ static int mp4_get_mdat_offset(char *buff, int buff_len)
     return -1;
 }
 
-static int mp4_get_mdat_len(char *buff)
+static int mp4_get_len(char *buff)
 {
     return buff[0] << 24 | buff[1] << 16 | buff[2] << 8 | buff[3];
 }
@@ -161,7 +178,7 @@ int repair_mp4(char *file)
     char *buff = NULL;
     int need_remove = 0;
     //printf("%s file = %s\n", __func__, file);
-    printf("%s 20211206 %s\n", __func__, file);
+    printf("%s 20220419 %s\n", __func__, file);
     if (file) {
         fd = open(file, O_RDWR);
         if (fd) {
@@ -192,11 +209,10 @@ int repair_mp4(char *file)
             }
             //printf("repa info %016llx, %016llx\n", repa_id, repa_pre);
             mdat_offset = mp4_get_mdat_offset(buff, buff_size);
-            //printf("%s mdat_offset = 0x%llx\n", __func__, mdat_offset);
             if (mdat_offset < 0)
                 printf("no mdat info\n");
             else
-                mdat_len = mp4_get_mdat_len(&buff[mdat_offset]);
+                mdat_len = mp4_get_len(&buff[mdat_offset]);
 
             if (mdat_len) {
                 if (mp4_moov_check(fd, mdat_offset + mdat_len) == -1)
@@ -215,7 +231,25 @@ int repair_mp4(char *file)
                     memset(buff, 0, buff_size);
                     read(fd, buff, buff_size);
                     //printf("file_offset = 0x%llx\n", file_offset);
-                    moov_offset = mp4_get_moov_offset(buff, buff_size, repa_id, &find);
+                    moov_offset = mp4_get_moov_offset(buff, buff_size, &find);
+                    if (find == 1) {
+                        int moov_len;
+                        char *moov_buff;
+                        if (moov_offset < 0)
+                            file_offset = file_offset - 4;
+                        else
+                            file_offset = file_offset + moov_offset;
+                        lseek(fd, file_offset, SEEK_SET);
+                        memset(buff, 0, buff_size);
+                        read(fd, buff, buff_size);
+                        moov_len = mp4_get_len(buff);
+                        lseek(fd, file_offset, SEEK_SET);
+                        moov_buff = malloc(moov_len);
+                        memset(moov_buff, 0, moov_len);
+                        read(fd, moov_buff, moov_len);
+                        moov_offset = mp4_get_moov_offset_repa(moov_buff, moov_len, repa_id, &find);
+                        free(moov_buff);
+                    }
                     if (find == 0) {
                         if (file_offset == 0) {
                             printf("Repaired fail\n");
@@ -236,7 +270,9 @@ int repair_mp4(char *file)
                                 }
                             }
                         }
-                    } else {
+                    } else if (find == -1) {
+                        file_offset = file_offset - buff_size;
+                    } else if (find == 1) {
                         mdat_len = file_offset + moov_offset - mdat_offset;
                         //printf("file_offset = 0x%llx, moov_offset = 0x%llx, mdat_offset = 0x%llx, mdat_len= 0x%x\n", file_offset, moov_offset, mdat_offset, mdat_len);
                         //printf("0x%llx\n", file_offset + moov_offset);
