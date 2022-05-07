@@ -178,7 +178,7 @@ int repair_mp4(char *file)
     char *buff = NULL;
     int need_remove = 0;
     //printf("%s file = %s\n", __func__, file);
-    printf("%s 20220419 %s\n", __func__, file);
+    printf("%s 20220507 %s\n", __func__, file);
     if (file) {
         fd = open(file, O_RDWR);
         if (fd) {
@@ -188,7 +188,7 @@ int repair_mp4(char *file)
             __u64 repa_id = 0;
             __u64 repa_pre = 0;
             unsigned int mdat_len = 0;
-            unsigned long file_size = lseek(fd, 0, SEEK_END);
+            off_t file_size = lseek(fd, 0, SEEK_END);
             if (file_size <= 0) {
                 printf("Does not support repair\n");
                 ret = REPA_NOSP;
@@ -213,12 +213,10 @@ int repair_mp4(char *file)
                 printf("no mdat info\n");
             else
                 mdat_len = mp4_get_len(&buff[mdat_offset]);
-
             if (mdat_len) {
                 if (mp4_moov_check(fd, mdat_offset + mdat_len) == -1)
                     mdat_len = 0;
             }
-
             if (mdat_len == 0) {
                 int again = 0;
                 int find = 0;
@@ -226,7 +224,6 @@ int repair_mp4(char *file)
                 while (1) {
                     if (file_offset < 0)
                         file_offset = 0;
-
                     lseek(fd, file_offset, SEEK_SET);
                     memset(buff, 0, buff_size);
                     read(fd, buff, buff_size);
@@ -243,12 +240,16 @@ int repair_mp4(char *file)
                         memset(buff, 0, buff_size);
                         read(fd, buff, buff_size);
                         moov_len = mp4_get_len(buff);
-                        lseek(fd, file_offset, SEEK_SET);
-                        moov_buff = malloc(moov_len);
-                        memset(moov_buff, 0, moov_len);
-                        read(fd, moov_buff, moov_len);
-                        moov_offset = mp4_get_moov_offset_repa(moov_buff, moov_len, repa_id, &find);
-                        free(moov_buff);
+                        if ((moov_len > 0) && (moov_len <= (file_size - file_offset))) {
+                            lseek(fd, file_offset, SEEK_SET);
+                            moov_buff = malloc(moov_len);
+                            memset(moov_buff, 0, moov_len);
+                            read(fd, moov_buff, moov_len);
+                            moov_offset = mp4_get_moov_offset_repa(moov_buff, moov_len, repa_id, &find);
+                            free(moov_buff);
+                        } else {
+                            find = -1;
+                        }
                     }
                     if (find == 0) {
                         if (file_offset == 0) {
