@@ -1843,7 +1843,7 @@ static int creat_tree_clustes(struct formatinfo *fmtinfo, struct inode *inode)
         if (child->isdir) {
             int i;
             int num = (child->size + fmtinfo->cluste_size - 1) / fmtinfo->cluste_size;
-            if (num < 0)
+            if (num <= 0)
                 num = 1;
             //printf("%s size = %lld, num = %d\n", child->name, child->size, num);
             for (i = 0; i < num; i++) {
@@ -1867,6 +1867,8 @@ static int creat_tree_clustes(struct formatinfo *fmtinfo, struct inode *inode)
         if (next->isdir) {
             int i;
             int num = (next->size + fmtinfo->cluste_size - 1) / fmtinfo->cluste_size;
+            if (num <= 0)
+                num = 1;
             //printf("%s size = %lld, num = %d\n", next->name, next->size, num);
             for (i = 0; i < num; i++) {
                 fmtinfo->cluster_count++;
@@ -1876,7 +1878,7 @@ static int creat_tree_clustes(struct formatinfo *fmtinfo, struct inode *inode)
         } else {
             int i;
             int num = (next->size + fmtinfo->cluste_size - 1) / fmtinfo->cluste_size;
-            if (num < 0)
+            if (num <= 0)
                 num = 1;
             //printf("%s size = %lld, num = %d\n", next->name, next->size, num);
             for (i = 0; i < num; i++) {
@@ -2055,7 +2057,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20211231\n");
+    printf("rkfsmk 20220519\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
