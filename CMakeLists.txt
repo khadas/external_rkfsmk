@@ -34,6 +34,11 @@ target_link_libraries(rkfsmk_tool ${PROJECT_NAME})
 install(TARGETS rkfsmk_tool
 		RUNTIME DESTINATION bin)
 
+add_executable(repa_mp4_tool demo/repa_mp4_tool.c)
+target_link_libraries(repa_mp4_tool ${PROJECT_NAME})
+install(TARGETS repa_mp4_tool
+                RUNTIME DESTINATION bin)
+
 add_executable(file_write_test demo/file_write_test.c)
 target_link_libraries(file_write_test ${PROJECT_NAME})
 install(TARGETS file_write_test

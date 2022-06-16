@@ -177,14 +177,16 @@ int repair_mp4(char *file)
     int fd = 0;
     char *buff = NULL;
     int need_remove = 0;
+    off_t cnt = 0; 
     //printf("%s file = %s\n", __func__, file);
-    printf("%s 20220507 %s\n", __func__, file);
+    printf("%s 20220616 %s\n", __func__, file);
     if (file) {
         fd = open(file, O_RDWR);
         if (fd) {
             off_t mdat_offset = 0;
             off_t moov_offset = 0;
             off_t file_offset = 0;
+            off_t moov_offset_last = 0;
             __u64 repa_id = 0;
             __u64 repa_pre = 0;
             unsigned int mdat_len = 0;
@@ -195,6 +197,7 @@ int repair_mp4(char *file)
                 need_remove = 1;
                 goto out;
             }
+            moov_offset_last = file_size;
             if (buff_size > file_size)
                 buff_size = file_size;
 
@@ -222,12 +225,25 @@ int repair_mp4(char *file)
                 int find = 0;
                 file_offset = file_size - buff_size;
                 while (1) {
+                    if (cnt > file_size) {
+                        ret = REPA_FAIL;
+                        printf("Repaired fail\n");
+                        break;
+                    }
+                    cnt += 64;
                     if (file_offset < 0)
                         file_offset = 0;
+                    //printf("%lld, %d\n", moov_offset_last - file_offset, buff_size);
+                    if (buff_size > (moov_offset_last - file_offset))
+                        buff_size = moov_offset_last - file_offset;
+                    if (buff_size <= 16) {
+                        ret = REPA_FAIL;
+                        break;
+                    }
                     lseek(fd, file_offset, SEEK_SET);
                     memset(buff, 0, buff_size);
                     read(fd, buff, buff_size);
-                    //printf("file_offset = 0x%llx\n", file_offset);
+                    //printf("file_offset = 0x%llx, buff_size = %d, %lld, %lld\n", file_offset, buff_size, cnt, file_size);
                     moov_offset = mp4_get_moov_offset(buff, buff_size, &find);
                     if (find == 1) {
                         int moov_len;
@@ -236,6 +252,7 @@ int repair_mp4(char *file)
                             file_offset = file_offset - 4;
                         else
                             file_offset = file_offset + moov_offset;
+                        moov_offset_last = file_offset;
                         lseek(fd, file_offset, SEEK_SET);
                         memset(buff, 0, buff_size);
                         read(fd, buff, buff_size);
