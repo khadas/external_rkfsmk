@@ -1719,10 +1719,13 @@ static void free_inode_tree(struct inode *inode)
 {
     if (inode) {
         struct cluste_info *cluste_info = inode->cluste_first;
+        struct cluste_info *info2free = NULL;
         while (cluste_info) {
             if (cluste_info->slots)
                 free(cluste_info->slots);
+            info2free = cluste_info;
             cluste_info = cluste_info->next;
+            free(info2free);
         }
         if (inode->child)
             free_inode_tree(inode->child);
@@ -2201,6 +2204,9 @@ void rkfsmk_destroy(void *handle)
             free(fmtinfo->info_sector);
         if (fmtinfo->fat)
             free(fmtinfo->fat);
+        if (fmtinfo->user_para) {
+            free(fmtinfo->user_para);
+        }
         free(fmtinfo);
     }
 }
