@@ -23,7 +23,7 @@
 #ifndef _BOOT_H
 #define _BOOT_H
 
-void BootRead(DOS_FS * fs);
+int BootRead(DOS_FS * fs);
 
 /* Reads the boot sector from the currently open device and initializes *FS */
 

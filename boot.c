@@ -335,7 +335,7 @@ static void check_fat_state_bit(DOS_FS * fs, void *b)
     }
 }
 
-void BootRead(DOS_FS * fs)
+int BootRead(DOS_FS * fs)
 {
     struct boot_sector b;
     unsigned total_sectors;
@@ -347,21 +347,28 @@ void BootRead(DOS_FS * fs)
     FsRead(fs, 0, sizeof(b), &b);
     memcpy(fs->system_id, b.system_id, 8);
     logical_sector_size = GET_UNALIGNED_W(b.sector_size);
-    if (!logical_sector_size)
-        Die("Logical sector size is zero.");
-
+    if (!logical_sector_size) {
+        printf("Logical sector size is zero.");
+        return -1;
+    }
     /* This was moved up because it's the first thing that will fail */
     /* if the platform needs special handling of unaligned multibyte accesses */
     /* but such handling isn't being provided. See GET_UNALIGNED_W() above. */
-    if (logical_sector_size & (SECTOR_SIZE - 1))
-        Die("Logical sector size (%d bytes) is not a multiple of the physical "
-              "sector size.", logical_sector_size);
+    if (logical_sector_size & (SECTOR_SIZE - 1)) {
+        printf("Logical sector size (%d bytes) is not a multiple of the physical "
+               "sector size.", logical_sector_size);
+        return -1;
+    }
 
     fs->cluster_size = b.cluster_size * logical_sector_size;
-    if (!fs->cluster_size)
-        Die("Cluster size is zero.");
-    if (b.fats != 2 && b.fats != 1)
-        Die("Currently, only 1 or 2 FATs are supported, not %d.\n", b.fats);
+    if (!fs->cluster_size) {
+        printf("Cluster size is zero.");
+        return -1;
+    }
+    if (b.fats != 2 && b.fats != 1) {
+        printf("Currently, only 1 or 2 FATs are supported, not %d.\n", b.fats);
+        return -1;
+    }
     fs->nfats = b.fats;
     sectors = GET_UNALIGNED_W(b.sectors);
     total_sectors = sectors ? sectors : le32toh(b.total_sect);
@@ -373,8 +380,10 @@ void BootRead(DOS_FS * fs)
 
     fat_length = le16toh(b.fat_length) ?
                  le16toh(b.fat_length) : le32toh(b.fat32_length);
-    if (!fat_length)
-        Die("FAT size is zero.");
+    if (!fat_length) {
+        printf("FAT size is zero.");
+        return -1;
+    }
 
     fs->fat_start = (off_t)le16toh(b.reserved) * logical_sector_size;
     fs->root_start = ((off_t)le16toh(b.reserved) + b.fats * fat_length) *
@@ -385,8 +394,10 @@ void BootRead(DOS_FS * fs)
                                                         logical_sector_size);
 
     data_size = (off_t)total_sectors * logical_sector_size - fs->data_start;
-    if (data_size < fs->cluster_size)
-        Die("Filesystem has no space for any data clusters");
+    if (data_size < fs->cluster_size) {
+        printf("Filesystem has no space for any data clusters");
+        return -1;
+    }
 
     fs->data_clusters = data_size / fs->cluster_size;
     fs->root_cluster = 0;   /* indicates standard, pre-FAT32 root dir */
@@ -403,8 +414,10 @@ void BootRead(DOS_FS * fs)
              * to complex for now... */
             printf("Warning: FAT32 root dir not in cluster chain! "
                    "Compatibility mode...\n");
-        else if (!fs->root_cluster && !fs->root_entries)
-            Die("No root directory!");
+        else if (!fs->root_cluster && !fs->root_entries) {
+            printf("No root directory!");
+            return -1;
+        }
         else if (fs->root_cluster && fs->root_entries)
             printf("Warning: FAT32 root dir is in a cluster chain, but "
                    "a separate root dir\n"
@@ -426,9 +439,11 @@ void BootRead(DOS_FS * fs)
         /* On real MS-DOS, a 16 bit FAT is used whenever there would be too
          * much clusers otherwise. */
         fs->fat_bits = (fs->data_clusters >= FAT12_THRESHOLD) ? 16 : 12;
-        if (fs->data_clusters >= FAT16_THRESHOLD)
-            Die("Too many clusters (%lu) for FAT16 filesystem.",
+        if (fs->data_clusters >= FAT16_THRESHOLD) {
+            printf("Too many clusters (%lu) for FAT16 filesystem.",
                   (unsigned long)fs->data_clusters);
+            return -1;
+        }
         check_fat_state_bit(fs, &b);
     } else {
         /* On Atari, things are more difficult: GEMDOS always uses 12bit FATs
@@ -447,31 +462,47 @@ void BootRead(DOS_FS * fs)
     fs->fat_size = fat_length * logical_sector_size;
 
     fs->label = calloc(12, sizeof(uint8_t));
+    if (NULL == fs->label) {
+      printf("malloc fs->label fail\n");
+      return -1;
+    }
     if (fs->fat_bits == 12 || fs->fat_bits == 16) {
         struct boot_sector_16 *b16 = (struct boot_sector_16 *)&b;
         if (b16->extended_sig == 0x29)
             memmove(fs->label, b16->label, 11);
-        else
+        else {
+            free(fs->label);
             fs->label = NULL;
+        }
     } else if (fs->fat_bits == 32) {
         if (b.extended_sig == 0x29)
             memmove(fs->label, &b.label, 11);
-        else
+        else {
+            free(fs->label);
             fs->label = NULL;
+        }
     }
 
     total_fat_entries = (uint64_t)fs->fat_size * 8 / fs->fat_bits;
-    if (fs->data_clusters > total_fat_entries - 2)
-        Die("Filesystem has %u clusters but only space for %u FAT entries.",
+    if (fs->data_clusters > total_fat_entries - 2) {
+        printf("Filesystem has %u clusters but only space for %u FAT entries.",
               fs->data_clusters, total_fat_entries - 2);
-    if (!fs->root_entries && !fs->root_cluster)
-        Die("Root directory has zero size.");
-    if (fs->root_entries & (MSDOS_DPS - 1))
-        Die("Root directory (%d entries) doesn't span an integral number of "
+        return -1;
+    }
+    if (!fs->root_entries && !fs->root_cluster) {
+        printf("Root directory has zero size.");
+        return -1;
+    }
+    if (fs->root_entries & (MSDOS_DPS - 1)) {
+        printf("Root directory (%d entries) doesn't span an integral number of "
               "sectors.", fs->root_entries);
-    if (logical_sector_size & (SECTOR_SIZE - 1))
-        Die("Logical sector size (%u bytes) is not a multiple of the physical "
+        return -1;
+    }
+    if (logical_sector_size & (SECTOR_SIZE - 1)) {
+        printf("Logical sector size (%u bytes) is not a multiple of the physical "
               "sector size.", logical_sector_size);
+        return -1;
+    }
 #if 0               /* linux kernel doesn't check that either */
     /* ++roman: On Atari, these two fields are often left uninitialized */
     if (!fs->atari_format && (!b.secs_track || !b.heads))
@@ -479,6 +510,7 @@ void BootRead(DOS_FS * fs)
 #endif
     if (verbose)
         dump_boot(fs, &b, logical_sector_size);
+    return 0;
 }
 #if 0
 static void write_boot_label(DOS_FS * fs, char *label)

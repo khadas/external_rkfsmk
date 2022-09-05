@@ -68,11 +68,17 @@ static void fs_free(DOS_FS *fs)
         free(fs->userpara);
     if (fs->cluster_owner)
         free(fs->cluster_owner);
+    if (fs->label) {
+        free(fs->label);
+    }
+    if (fs->fat) {
+        free(fs->fat);
+    }
 }
 
 int rkfsmk_fat_check(char *dev, struct reg_para *para)
 {
-    int ret;
+    int ret = RKFSCK_FAIL;
     DOS_FS fs;
     int salvage_files, verify, c;
     uint32_t free_clusters = 0;
@@ -94,11 +100,14 @@ int rkfsmk_fat_check(char *dev, struct reg_para *para)
     if (FsOpen(&fs, dev, rw) != 0)
         return RKFSCK_FAIL;
 
-    BootRead(&fs);
-    if (boot_only)
-        goto exit;
+    if (BootRead(&fs)) {
+      goto exit;
+    }
 
-    if (para->check_format_id) {
+    if (boot_only)
+      goto exit;
+
+    if (para && para->check_format_id) {
         int i = 0;
         for (i = 0; i < 8; i++) {
             if (fs.system_id[i] != para->format_id[i]) {
