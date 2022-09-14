@@ -304,17 +304,19 @@ int GetDevInfo(int fd, struct device_info *info)
 
 int IsDevMounted(const char *path)
 {
+    int ret = 0;
 #if HAVE_DECL_GETMNTENT
     FILE *f;
     struct mntent *mnt;
-
     if ((f = setmntent(_PATH_MOUNTED, "r")) == NULL)
         return 0;
     while ((mnt = getmntent(f)) != NULL)
-        if (strcmp(path, mnt->mnt_fsname) == 0)
-            return 1;
+        if (strcmp(path, mnt->mnt_fsname) == 0) {
+            ret = 1;
+            break;
+        }
     endmntent(f);
-    return 0;
+    return ret;
 #endif
 
 #if HAVE_DECL_GETMNTINFO
@@ -325,7 +327,7 @@ int IsDevMounted(const char *path)
     for (i = 0; i < count; i++)
         if (!strcmp(path, stat[i].f_mntfromname))
             return 1;
-    return 0;
+    return ret;
 #endif
 
     (void)path; /* prevent unused parameter warning */
