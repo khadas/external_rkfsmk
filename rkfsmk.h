@@ -17,6 +17,10 @@
 #ifndef __RKFSMK_H
 #define __RKFSMK_H
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

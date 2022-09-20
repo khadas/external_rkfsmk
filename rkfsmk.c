@@ -51,6 +51,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -1080,10 +1081,17 @@ static int setup_tables(struct formatinfo *fmtinfo)
     else
         fmtinfo->alloced_fat_length = 1;
 
-    if ((fmtinfo->fat =
-             (unsigned char *)malloc(fmtinfo->alloced_fat_length * fmtinfo->sector_size)) == NULL) {
+    if (fmtinfo->nr_fats != 1) {
+        printf("rkfsmk: nr_fats %d != 1, not supported\n", fmtinfo->nr_fats);
         ret = -1;
         goto out;
+    }
+    if ((fmtinfo->fat = mmap(NULL, fmtinfo->alloced_fat_length * fmtinfo->sector_size,
+                             PROT_WRITE | PROT_READ, MAP_SHARED, fmtinfo->dev,
+                             fmtinfo->reserved_sectors * fmtinfo->sector_size)) == MAP_FAILED) {
+         printf("rkfsmk: mmap fat failed, %d\n", errno);
+         ret = -1;
+         goto out;
     }
 
     memset(fmtinfo->fat, 0, fmtinfo->alloced_fat_length * fmtinfo->sector_size);
@@ -1176,13 +1184,6 @@ out:
 
 /* Write the new filesystem's data tables to wherever they're going to end up! */
 
-#define error(str)              \
-  do {                      \
-    free (fmtinfo->fat);                 \
-    if (fmtinfo->info_sector) free (fmtinfo->info_sector);    \
-    die (str);                  \
-  } while(0)
-
 #define seekto(pos,errstr)                      \
   do {                                  \
     off_t __pos = (pos);                        \
@@ -1224,11 +1225,13 @@ static int write_tables(struct formatinfo *fmtinfo)
         }
     }
     /* seek to start of FATS and write them all */
-    seekto(fmtinfo->reserved_sectors * fmtinfo->sector_size, "first FAT");
-    for (x = 1; x <= fmtinfo->nr_fats; x++) {
+    seekto(fmtinfo->reserved_sectors * fmtinfo->sector_size +
+           fmtinfo->alloced_fat_length * fmtinfo->sector_size, "first FAT");
+    //FIXME: use mmap so skip write fat buf. nr_fats shall be 1.
+    for (x = 1; x <= 1 /*fmtinfo->nr_fats*/; x++) {
         int y;
         int blank_fat_length = fat_length - fmtinfo->alloced_fat_length;
-        writebuf(fmtinfo->fat, fmtinfo->alloced_fat_length * fmtinfo->sector_size, "FAT");
+        // writebuf(fmtinfo->fat, fmtinfo->alloced_fat_length * fmtinfo->sector_size, "FAT");
         for (y = 0; y < blank_fat_length; y++)
             writebuf(fmtinfo->blank_sector, fmtinfo->sector_size, "FAT");
     }
@@ -2060,7 +2063,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
     int blocks_specified = 0;
     struct timeval create_timeval;
 
-    printf("rkfsmk 20220519\n");
+    printf("rkfsmk 20220920\n");
     printf("device_name = %s, volume_name = %s\n", device_name, volume_name);
     *info = (void *)fmtinfo;
 
@@ -2202,8 +2205,8 @@ void rkfsmk_destroy(void *handle)
             free(fmtinfo->blank_sector);
         if (fmtinfo->info_sector)
             free(fmtinfo->info_sector);
-        if (fmtinfo->fat)
-            free(fmtinfo->fat);
+        if (fmtinfo->fat && fmtinfo->fat != MAP_FAILED)
+            munmap(fmtinfo->fat, fmtinfo->alloced_fat_length * fmtinfo->sector_size);
         if (fmtinfo->user_para) {
             free(fmtinfo->user_para);
         }
