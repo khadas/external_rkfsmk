@@ -2072,7 +2072,7 @@ int rkfsmk_create(void **info, char *device_name, char *volume_name, unsigned in
         goto err;
     }
 
-    dev = open(device_name, O_EXCL | O_RDWR);   /* Is it a suitable device to build the FS on? */
+    dev = open(device_name, O_CLOEXEC | O_RDWR);   /* Is it a suitable device to build the FS on? */
     if (dev < 0) {
         ret = -2;
         goto err;
