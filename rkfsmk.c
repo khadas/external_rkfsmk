@@ -2307,7 +2307,7 @@ int kernel_get_file_size(char *filename, off_t *size, off_t *space)
 
 int kernel_pre_created_file(char *filename, off_t size)
 {
-    int fd = open(filename, O_CREAT | O_RDWR | O_DIRECT);
+    int fd = open(filename, O_CREAT | O_RDWR | O_DIRECT, 0644);
     if (fd) {
         write(fd, NULL, size);
         fsync(fd);
@@ -2330,7 +2330,7 @@ int kernel_chk_format(char *path)
 	  int len = strlen(path) + 16;
 	  filename = malloc(len);
 	  sprintf(filename, "%s/chkfmt", path);
-    fd = open(filename, O_CREAT | O_RDWR);
+    fd = open(filename, O_CREAT | O_RDWR, 0644);
     if (fd) {
         ioctl(fd, FAT_IOCTL_CHK_FORMAT, &flag);
         close(fd);
